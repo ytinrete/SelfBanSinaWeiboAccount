@@ -4,6 +4,9 @@ import urllib.error
 import json
 import time
 import datetime
+from tkinter import *
+from tkinter import ttk
+import threading
 
 
 def common_request_maker(path):
@@ -26,18 +29,18 @@ def weibo_login(name, passwd):
         req.add_header('Referer', 'https://passport.weibo.cn/signin/login?entry=mweibo')
         data = urllib.parse.urlencode({'username': name,
                                        'password': passwd})  # + '&savestate=1&r=http://m.weibo.cn/?jumpfrom=weibocom&entry=mweibo&mainpageflag=1&ec=0'
-        print(data)
+        log(data)
         data = bytes(data, 'utf-8')
         # request.add_header('Content-Length', len(data))
         try:
             response = urllib.request.urlopen(req, data, timeout=10)
         except urllib.error.HTTPError as e:
-            print(e)
+            log(e)
             return
         res_str = str(response.read(), 'utf-8')
-        print('登陆返回内容-----------')
-        print(res_str)
-        print('登陆返回内容-----------')
+        log('登陆返回内容-----------')
+        log(res_str)
+        log('登陆返回内容-----------')
         login_data = None
         try:
             res_obj = json.loads(res_str)
@@ -55,12 +58,12 @@ def weibo_login(name, passwd):
                     urllib.parse.urlparse(res_obj.get('data').get('crossdomainlist').get('sina.com.cn')).query)[
                     'ticket']
                 # login_data['st'] = weibo_login_st(login_data['cookie'])
-                # print(login_data['st'])
+                # log(login_data['st'])
             else:
                 assert BaseException('登录失败!')
 
         except BaseException as e:
-            print(e)
+            log(e)
 
         return login_data
 
@@ -75,46 +78,46 @@ def weibo_login_st(cookie):
     try:
         response = urllib.request.urlopen(req, timeout=10)
     except urllib.error.HTTPError as e:
-        print(e)
+        log(e)
         return
     res_str = str(response.read(), 'utf-8')
-    print('weibo_login_st返回内容-----------')
-    print(res_str)
-    print('weibo_login_st返回内容-----------')
+    log('weibo_login_st返回内容-----------')
+    log(res_str)
+    log('weibo_login_st返回内容-----------')
     index = res_str.find('"st":"')
     return res_str[index + 6:index + 12]
 
 
 # http://m.weibo.cn/feed/friends?version=v4
 # 获取微博首页next_cursor是用来翻页的,第一页不传就好
-def weibo_homepage(next_cursor=None):
+def weibo_homepage(login_data, next_cursor=None):
     if next_cursor:
         req = common_request_maker('http://m.weibo.cn/feed/friends?version=v4&next_cursor=' + next_cursor)
     else:
         req = common_request_maker('http://m.weibo.cn/feed/friends?version=v4')
     req.add_header('Referer', 'http://m.weibo.cn/?jumpfrom=wapv4')
-    req.add_header('Cookie', obj['cookie'])
+    req.add_header('Cookie', login_data['cookie'])
 
     try:
         response = urllib.request.urlopen(req, timeout=10)
     except urllib.error.HTTPError as e:
-        print(e)
+        log(e)
         return
     res_str = str(response.read(), 'utf-8')
-    print('获取首页返回内容-----------')
-    print(res_str)
-    print('获取首页返回内容-----------')
+    log('获取首页返回内容-----------')
+    log(res_str)
+    log('获取首页返回内容-----------')
 
     try:
         res_obj = json.loads(res_str)
         res_obj = res_obj[0]
-        print(res_obj.get('next_cursor'))
+        log(res_obj.get('next_cursor'))
 
-        return  res_obj['card_group']
+        return res_obj['card_group']
 
 
     except BaseException as e:
-        print(e)
+        log(e)
 
 
 '''
@@ -241,34 +244,34 @@ def weibo_homepage(next_cursor=None):
 
 # http://m.weibo.cn/index/my?format=cards
 # 微博获取首页自己发的帖子(准备拿来删除用的)
-def weibo_get_my_posts(page=None):
+def weibo_get_my_posts(login_data, page=None):
     if page:
         req = common_request_maker('http://m.weibo.cn/index/my?format=cards&page=2' + page)
     else:
         req = common_request_maker('http://m.weibo.cn/index/my?format=cards')
-    req.add_header('Cookie', obj['cookie'])
+    req.add_header('Cookie', login_data['cookie'])
 
     try:
         response = urllib.request.urlopen(req, timeout=10)
     except urllib.error.HTTPError as e:
-        print(e)
+        log(e)
         return
     res_str = str(response.read(), 'utf-8')
-    print('获取自己发的帖子 返回内容-----------')
-    print(res_str)
-    print('获取自己发的帖子 返回内容-----------')
+    log('获取自己发的帖子 返回内容-----------')
+    log(res_str)
+    log('获取自己发的帖子 返回内容-----------')
 
     try:
         res_obj = json.loads(res_str)
         res_obj = res_obj[0]
         posts = res_obj['card_group']
 
-        print(posts[0]['mblog']['id'])
+        log(posts[0]['mblog']['id'])
 
         return posts[0]['mblog']['id']
 
     except BaseException as e:
-        print(e)
+        log(e)
 
 
 '''
@@ -353,88 +356,86 @@ def weibo_get_my_posts(page=None):
 
 # http://m.weibo.cn/mblogDeal/delMyMblog
 #  删除自己的单条帖子
-def weibo_delete_single_post(id):
+def weibo_delete_single_post(login_data, id):
     if id:
         req = common_request_maker('http://m.weibo.cn/mblogDeal/delMyMblog')
         req.add_header('Origin', 'http://m.weibo.cn')
         req.add_header('Referer', 'http://m.weibo.cn/?jumpfrom=weibocom')
-        req.add_header('Cookie', obj['cookie'])
+        req.add_header('Cookie', login_data['cookie'])
         data = urllib.parse.urlencode({'id': id})
         data = bytes(data, 'utf-8')
 
         try:
             response = urllib.request.urlopen(req, data, timeout=10)
         except urllib.error.HTTPError as e:
-            print(e)
+            log(e)
             return
         res_str = str(response.read(), 'utf-8')
-        print('删除自己的单条帖子 返回内容-----------')
-        print(res_str)
-        print('删除自己的单条帖子 返回内容-----------')
-
-
-# 删除自己的所有微博,->获取列表拿第一项->删除->延时10秒->再获取列表如此反复
-def weibo_del_all_my_post():
-    for i in range(999999):
-        id = weibo_get_my_posts()
-        if id:
-            weibo_delete_single_post(id)
-            time.sleep(10)
-        else:
-            break
+        log('删除自己的单条帖子 返回内容-----------')
+        log(res_str)
+        log('删除自己的单条帖子 返回内容-----------')
 
 
 # http://m.weibo.cn/mblogDeal/addAMblog
 # 微博直接发普通帖子
-def weibo_send_single_post(content):
+def weibo_send_single_post(login_data, content):
     if content:
         req = common_request_maker('http://m.weibo.cn/mblogDeal/addAMblog')
         req.add_header('Origin', 'http://m.weibo.cn')
         req.add_header('Referer', 'http://m.weibo.cn/mblog')
-        req.add_header('Cookie', obj['cookie'])
+        req.add_header('Cookie', login_data['cookie'])
         data = urllib.parse.urlencode({'content': content})
         data = bytes(data, 'utf-8')
 
         try:
             response = urllib.request.urlopen(req, data, timeout=10)
         except urllib.error.HTTPError as e:
-            print(e)
+            log(e)
             return
         res_str = str(response.read(), 'utf-8')
-        print('发帖返回内容-----------')
-        print(res_str)
-        print('发帖返回内容-----------')
+        log('发帖返回内容-----------')
+        log(res_str)
+        log('发帖返回内容-----------')
 
 
 # http://m.weibo.cn/mblogDeal/rtMblog
 # 转发内容
-def weibo_repost(id, content, rtcomment=None):
+def weibo_repost(login_data, id, content, rtcomment=None, code=None):
     if id and content:
         req = common_request_maker('http://m.weibo.cn/mblogDeal/rtMblog')
         req.add_header('Origin', 'http://m.weibo.cn')
         req.add_header('Referer', 'http://m.weibo.cn/repost?id=' + id)
-        req.add_header('Cookie', obj['cookie'])
+        req.add_header('Cookie', login_data['cookie'])
+        data = {'content': content, 'id': id}
         if rtcomment:
-            data = urllib.parse.urlencode({'content': content, 'id': id, 'rtcomment': rtcomment})
-        else:
-            data = urllib.parse.urlencode({'content': content, 'id': id})
-        data = bytes(data, 'utf-8')
+            data['rtcomment'] = rtcomment
+        if code:
+            data['code'] = code
+        data = bytes(urllib.parse.urlencode(data), 'utf-8')
         # req.add_header('Content-Length', len(data))
 
         try:
             response = urllib.request.urlopen(req, data, timeout=10)
         except urllib.error.HTTPError as e:
-            print(e)
+            log(e)
             return
         res_str = str(response.read(), 'utf-8')
-        print('转发内容 返回内容-----------')
-        print(res_str)
-        print('转发内容 返回内容-----------')
+        log('转发内容 返回内容-----------')
+        log(res_str)
+        log('转发内容 返回内容-----------')
+
+        try:
+            res_obj = json.loads(res_str)
+            if str(res_obj['ok']) == '-3':
+                return str(res_obj['captId'])
+
+        except BaseException as e:
+            log(e)
 
 
 # http://m.weibo.cn/api/comments/create
 # 评论微博,这个接口比较麻烦,st这东西得从其他接口去拿,而且有时候每个帖子还不一样,所以以后需要再弄
-def weibo_comment(id, st, content, repost=None):
+def weibo_comment(login_data, id, st, content, repost=None):
     if id and content:
         req = common_request_maker('http://m.weibo.cn/api/comments/create')
         req.add_header('Origin', 'http://m.weibo.cn')
@@ -447,7 +448,7 @@ def weibo_comment(id, st, content, repost=None):
         # req.add_header('Accept-Language', 'en-US')
 
 
-        req.add_header('Cookie', obj['cookie'])
+        req.add_header('Cookie', login_data['cookie'])
         if repost:
             data = urllib.parse.urlencode({'content': content, 'id': id, 'mid': id, 'st': st, 'dualPost': '1'})
         else:
@@ -457,12 +458,12 @@ def weibo_comment(id, st, content, repost=None):
         try:
             response = urllib.request.urlopen(req, data, timeout=10)
         except urllib.error.HTTPError as e:
-            print(e)
+            log(e)
             return
         res_str = str(response.read(), 'utf-8')
-        print('评论微博 返回内容-----------')
-        print(res_str)
-        print('评论微博 返回内容-----------')
+        log('评论微博 返回内容-----------')
+        log(res_str)
+        log('评论微博 返回内容-----------')
 
 
 # http://m.weibo.cn/api/friendships/destory
@@ -478,26 +479,129 @@ def weibo_comment(id, st, content, repost=None):
 # http://m.weibo.cn/api/comments/show?id=4084847486563541&page=1
 
 
-obj = {}
 
 
-def send_span(content, times, duration):
-    for i in range(times - 1):
-        posts = weibo_homepage()
-        for post in posts:
-            weibo_repost(post['mblog']['id'], content, post['mblog']['user']['id'])
-            time.sleep(duration)
+
+
+
+class Application(Frame):
+    def __init__(self, master=None):
+        Frame.__init__(self, master)
+        self.pack()
+        self.create_ui()
+
+    def create_ui(self):
+        self.account_label = Label(self, text='Account账号:')
+        self.account_label.pack()
+        self.account_input = Entry(self)
+        self.account_input.pack()
+
+        self.passwd_label = Label(self, text='Password密码:')
+        self.passwd_label.pack()
+        self.passwd_input = Entry(self)
+        self.passwd_input.pack()
+
+        self.init_button = Button(self, text='Init初始化', command=self.init)
+        self.init_button.pack()
+
+        self.log_label = Label(self, text='Log日志:')
+        self.log_label.config()
+        self.log_label.pack()
+
+        self.info_frame = Frame(self)
+        self.info_frame.pack()
+
+        self.info_text = Text(self.info_frame, height=10, width=100, bd=5, bg='#9c9c9c')
+        self.info_text.pack(side=LEFT, fill=Y)
+        # self.info_text.configure()
+        self.info_text.scroll = Scrollbar(self.info_frame)
+        self.info_text.scroll.pack(side=RIGHT, fill=Y)
+        self.info_text.scroll.config(command=self.info_text.yview)
+        self.info_text.config(yscrollcommand=self.info_text.scroll.set)
+
+        self.func_frame = Frame(self)
+        self.func_frame.pack()
+        self.func_del_button = Button(self.func_frame, text='Del_post删除帖子', command=self.func_del)
+        self.func_del_button.pack(side=LEFT)
+        self.func_ban_button = Button(self.func_frame, text='ban_account封号', command=self.func_ban)
+        self.func_ban_button.pack(side=RIGHT)
+
+        self.ban_frame = Frame(self, height=400, width=300, bd=5, bg='#9c9c9c')
+        self.ban_frame.pack()
+
+    def init(self):
+        login_data = weibo_login(self.account_input.get(), self.passwd_input.get())
+        if login_data:
+            self.login_data = login_data
+            self.init_button.configure(state='disabled')
+
+    def func_del(self):
+        if self.login_data:
+            self.func_del_button.configure(state='disabled')
+            threading.Thread(target=self.weibo_del_all_my_post(self.login_data)).start()
+
+    # 删除自己的所有微博,->获取列表拿第一项->删除->延时10秒->再获取列表如此反复
+    def weibo_del_all_my_post(self, login_data):
+        for i in range(999999):
+            id = weibo_get_my_posts(login_data)
+            if id:
+                weibo_delete_single_post(login_data, id)
+                time.sleep(10)
+                log('等待10秒')
+            else:
+                break
+
+    def func_ban(self):
+        if self.login_data:
+            self.func_ban_button.configure(state='disabled')
+            threading.Thread(target=self.try_ban(
+                self.login_data, '1000粉仅售0.5元,专业服务值得信赖,需要的请快速联系!!', 500, 30)).start()
+
+    # 发垃圾贴->获取列表遍历所有帖子->发垃圾->延时10秒->再获取列表如此反复
+    def try_ban(self, login_data, content, times, duration):
+        for i in range(times - 1):
+            posts = weibo_homepage(login_data)
+            for post in posts:
+                captId = weibo_repost(login_data, post['mblog']['id'], content, post['mblog']['user']['id'])
+                if captId:
+                    self.add_block(login_data, post['mblog']['id'], content, post['mblog']['user']['id'], captId)
+                time.sleep(duration)
+
+    def add_block(self, login_data, content, times, duration, captId):
+        # 这里是因为发帖太多需要验证码所致,本来设计是GUI用户自己识别,输入,在weibo_repost添加code参数实现
+        # GUI的设计是取得验证码图片后,在Frame里面加一个block,有文本框,确认按钮,将验证码输入文本框然后点确定,然后
+        # 这个block从fame中移除,同时在发起网络请求重试,但是我准备实现这部分代码的时候。。。微博账号被封了。。。2333333
+        # 所以就没有必要再搞了。。。以后用到再说吧
+        pass
+
+    def app_pirnt(self, str):
+        self.info_text.insert(END, str + "\n")
+
+
+app = None
+
+
+def log(str):
+    print(str)
+    if app:
+        app.app_pirnt(str)
+
 
 if __name__ == "__main__":
-    obj = weibo_login('account', 'passwd')
 
-    if obj:
+    app = Application()
+    # 设置窗口标题:
+    app.master.title('喵喵喵')
+    # 主消息循环:
+    app.mainloop()
+
+    # if obj:
         # weibo_del_all_my_post()
         # weibo_send_single_post('6553555')
         # weibo_comment(weibo_homepage(), obj['st'], 'aaaaa')
 
-        send_span("1000粉仅售0.5元,专业服务值得信赖,需要的请快速联系!!" + str(datetime.datetime.now().timestamp()), 500, 10)
+        # send_span("1000粉仅售0.5元,专业服务值得信赖,需要的请快速联系!!" + str(datetime.datetime.now().timestamp()), 500, 60)
 
-        pass
+        # pass
 
     pass
